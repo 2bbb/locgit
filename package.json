@@ -1,0 +1,50 @@
+{
+  "name": "locgit",
+  "version": "0.0.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "",
+  "author": "ISHII 2bit",
+  "license": "MIT",
+  "keywords": [],
+  "main": "lib/index.js",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "start": "node lib/index.js",
+    "build": "tsc",
+    "pack": "electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^16.0.0",
+    "electron": "^17.1.2",
+    "electron-builder": "^22.14.13",
+    "typescript": "^4.6.2"
+  },
+  "dependencies": {
+    "node-git-server": "^1.0.0-beta.30"
+  },
+  "build": {
+    "appId": "jp.2bit.locgit",
+    "files": [
+        "lib/**/*",
+        "resources/**/*"
+    ],
+    "mac": {
+        "icon": "./resources/locgit-icon.png",
+        "target": [
+            "dmg",
+            "zip"
+        ]
+    },
+    "win": {
+        "icon": "./resources/locgit-icon.png",
+        "target": "portable"
+    },
+    "dmg": {
+        "sign": true
+    }
+  }
+}
