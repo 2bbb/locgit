@@ -18,7 +18,8 @@ const createTrayIcon = async () => {
         }
     }
     const contextMenu = Menu.buildFromTemplate([
-        { label: 'Quit', role: 'quit' }
+        { label: 'Quit', role: 'quit' },
+        { label: 'git remote add locgit http://XX.XX.XX.XX:18080/{REPO_NAME}' }
     ]);
     const icon = nativeImage.createFromPath(icon_path);
     tray = new Tray(icon);
@@ -35,6 +36,7 @@ const createTrayIcon = async () => {
                 tray?.setImage(icon);
             }
         });
+        app.dock.hide();
     }
 };
 
@@ -45,11 +47,9 @@ app.whenReady().then(() => {
 
 import { Git } from 'node-git-server';
 
-const port = !process.env.PORT || isNaN(parseInt(process.env.PORT))
-    ? 7005
-    : parseInt(process.env.PORT);
+const port = 18080;
 
-const repos = new Git(path.join(__dirname, '../repo'), {
+const repos = new Git(path.join(app.getPath('home'), 'locgit_repositories'), {
     autoCreate: true,
 });
 
