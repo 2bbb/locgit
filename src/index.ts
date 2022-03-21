@@ -61,7 +61,7 @@ const createTrayIcon = async () => {
     let icon_path: string | null = null;
     console.log(process.platform);
     if(process.platform === 'win32') {
-        icon_path = path.join(resource_dir, 'git-white.ico');
+        icon_path = path.join(resource_dir, 'git-black.ico');
     } else {
         if(nativeTheme.shouldUseDarkColors){
             icon_path = path.join(resource_dir, 'git-white.png');

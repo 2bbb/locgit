@@ -42,6 +42,9 @@
     "win": {
       "icon": "./resources/locgit-icon.png",
       "target": "portable"
+    },
+    "linux": {
+      "icon": "./resources/locgit-icon.png"
     }
   }
 }
