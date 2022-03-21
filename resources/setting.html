@@ -1,0 +1,82 @@
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>locgit settings</title>
+    <style>
+        * {
+            color: #ddd;
+        }
+        body {
+            background-color: #222;
+        }
+        input {
+            background-color: #000;
+        }
+        button {
+            background-color: #000;
+        }
+        label {
+            font-weight: 600;
+        }
+        #repository_path {
+            width: 100%;
+        }
+        input {
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>locgit settings</h1>
+    <label for="port">port</label>: <input
+        id="port" 
+        type="number"
+        value="18080"
+        min="1024"
+        max="65535"
+        step="1"><br>
+    <label for="repository_path">path for repositories</label>:<br>
+    <input
+        id="repository_path" 
+        type="text"
+        value=""><br>
+    <button id="apply">apply</button>
+    <hr>
+    <button id="open_website">open website</button>
+    <script>
+        const port_elem = document.getElementById('port');
+        let correct_port = 18080;
+        port_elem.addEventListener('change', () => {
+            const value = parseFloat(port_elem.value);
+            if(value < 1024 || 65535 < value) {
+                alert('port number must be between 1024 and 65535');
+                port_elem.value = correct_port.toString();
+                return;
+            } else if(!Number.isInteger(value)) {
+                port_elem.value = Math.floor(value).toString();
+            }
+            correct_port = parseInt(port_elem.value);
+        })
+        const repository_path_elem = document.getElementById('repository_path');
+        document.getElementById('apply').onclick = function() {
+            const port = parseInt(port_elem.value);
+            const repository_path = repository_path_elem.value;
+            api.send('apply', { port, repository_path });
+        }
+        api.send('init-request');
+        api.on('init-response', (setting) => {
+            console.log('init-response', setting);
+            correct_port = setting.port;
+            port_elem.value = setting.port.toString();
+            repository_path_elem.value = setting.repository_path;
+        });
+        api.on('alert', (text) => {
+            console.log('alert', text);
+            alert(text);
+        });
+        document.getElementById('open_website').onclick = function() {
+            api.send('open-website');
+        }
+    </script>
+</body>
+</html>

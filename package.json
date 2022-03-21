@@ -1,6 +1,6 @@
 {
   "name": "locgit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publishConfig": {
     "access": "public"
   },
@@ -13,9 +13,9 @@
     "lib"
   ],
   "scripts": {
-    "start": "node lib/index.js",
+    "start": "npm run build && electron .",
     "build": "tsc",
-    "pack": "electron-builder"
+    "pack": "npm run build && electron-builder -mwl"
   },
   "devDependencies": {
     "@types/node": "^16.0.0",
@@ -29,22 +29,19 @@
   "build": {
     "appId": "jp.2bit.locgit",
     "files": [
-        "lib/**/*",
-        "resources/**/*"
+      "lib/**/*",
+      "resources/**/*"
     ],
     "mac": {
-        "icon": "./resources/locgit-icon.png",
-        "target": [
-            "dmg",
-            "zip"
-        ]
+      "icon": "./resources/locgit-icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-        "icon": "./resources/locgit-icon.png",
-        "target": "portable"
-    },
-    "dmg": {
-        "sign": true
+      "icon": "./resources/locgit-icon.png",
+      "target": "portable"
     }
   }
 }
