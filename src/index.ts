@@ -124,7 +124,6 @@ app.on('window-all-closed', (e: Event) => {
 });
 
 import { Git } from 'node-git-server';
-import { electron } from 'process';
 
 function setupRepository(): Git {
     const repos = new Git(settings.repository_path, {
