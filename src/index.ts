@@ -50,11 +50,29 @@ function setContextMenu() {
                 else openSettingWindow();
             }
         },
+        { 
+            label: `Open list of repositories on browser`,
+            click() {
+                shell.openExternal('http://localhost:8080/');
+            }
+        },
         { label: 'Quit', role: 'quit' },
-        { type: 'separator' },
-        { label: `How To Use: git remote add locgit http://XX.XX.XX.XX:${settings.port}/{YOUR_REPO_NAME}`, type: 'normal' },
     ]);
     tray?.setContextMenu(contextMenu);
+}
+
+import moment from 'moment';
+
+const logs: string[] = [];
+function push_log(log: string) {
+    logs.push(`${moment().format('YYYY/MM/DD hh:mm:ss')}: ${log}`);
+    while(10 < logs.length) {
+        logs.shift();
+    }
+    if(tray) {
+        tray.setToolTip(`${app.name} is running.\n---- ---- ---- ----\n${logs.join("\n")}`);
+        
+    }
 }
 
 const createTrayIcon = async () => {
@@ -71,7 +89,7 @@ const createTrayIcon = async () => {
     }
     const icon = nativeImage.createFromPath(icon_path);
     tray = new Tray(icon);
-    tray.setToolTip(`${app.name} is running.`);
+    tray.setToolTip(`${app.name} is running.\n---- ---- ---- ----\nno activity.`);
     setContextMenu();
 
     if(process.platform === 'darwin') { 
@@ -123,23 +141,64 @@ app.on('window-all-closed', (e: Event) => {
     e.preventDefault();
 });
 
-import { Git } from 'node-git-server';
+import { FetchData, Git, HeadData, HttpDuplex, InfoData, PushData, TagData } from 'node-git-server';
+import { execSync } from 'child_process';
+
+const pretty_format = "[%h] %ci: \\\"%s\\\" by %an";
 
 function setupRepository(): Git {
     const repos = new Git(settings.repository_path, {
         autoCreate: true,
     });
     
-    repos.on('push', (push) => {
-        console.log(`push ${push.repo}/${push.commit} ( ${push.branch} )`);
+    function get_address_str<T extends HttpDuplex>(duplex: T): string {
+        const address = duplex.socket.address() as AddressInfo;
+        if(address.address) {
+            return `\n  from ${address.address}`;
+        } else {
+            return '\n  from unknown';
+        }
+    }
+
+    repos.on('push', (push: PushData) => {
+        const dir = repos.dirMap(`${push.repo}.git`);
         push.accept();
+        const latest_commit_message = execSync(`git log -1 --pretty="${pretty_format}"`, {
+            cwd: dir
+        }).toString();
+        const log = `pushed: ${push.repo}#${push.branch} [ ${push.commit} ]${get_address_str(push)}\n${latest_commit_message}`;
+        console.log(log);
+        push_log(log);
     });
     
-    repos.on('fetch', (fetch) => {
-        console.log(`fetch ${fetch.commit}`);
+    repos.on('fetch', (fetch: FetchData) => {
+        const log = `fetched: ${fetch.repo} [ ${fetch.commit} ]${get_address_str(fetch)}`;
+        console.log(log);
+        push_log(log);
         fetch.accept();
     });
-    
+
+    repos.on('tag', (tag: TagData) => {
+        const log = `tag: "${tag.version}" ${tag.repo} [ ${tag.commit} ]${get_address_str(tag)}`;
+        console.log(log);
+        push_log(log);
+        tag.accept();
+    });
+
+    // repos.on('info', (info: InfoData) => {
+    //     const log = `info: ${info.repo}${get_address_str(info)}`;
+    //     console.log(log);
+    //     push_log(log);
+    //     info.accept();
+    // });
+
+    repos.on('head', (head: HeadData) => {
+        const log = `head: ${head.repo}${get_address_str(head)}`;
+        console.log(log);
+        push_log(log);
+        head.accept();
+    });
+
     repos.listen(settings.port, { type: 'http' }, () => {
         console.log(`gitectron running at http://localhost:${settings.port}`);
     });
@@ -181,4 +240,41 @@ ipcMain.on('open-website', async () => {
         console.error('Error:', err);
         sendApi('alert', 'failed to open https://github.com/2bbb/locgit\n' + err.toString());
     }
+});
+
+import express from "express";
+import { AddressInfo } from 'net';
+
+const express_app = express();
+
+// respond with "hello world" when a GET request is made to the homepage
+express_app.get('/', (req, res) => {
+    res.sendFile('index.html', { root: resource_dir });
+})
+
+express_app.get('/repositories.json', async (req, res) => {
+    try {
+        const repositories = await (await repos.list()).map(repo => {
+            const dir = repos.dirMap(`${repo}`);
+            const logs = [0, 1, 2, 3, 4].map((n) => {
+                const command = `git log -1 --skip=${n} --pretty="${pretty_format}"`;
+                try {
+                    const log = execSync(command, {
+                        cwd: dir
+                    }).toString();
+                    return log;
+                } catch(err) {
+                    return undefined;
+                }
+            }).filter(log => log != '' && log != null);
+            return { name: repo, logs };
+        });
+        res.status(200).json({ repositories, port: settings.port });
+    } catch(err) {
+        res.status(500).send((err as any).toString());
+    }
+});
+
+express_app.listen(8080, '0.0.0.0', () => {
+    console.log('http server on port 8080');
 });

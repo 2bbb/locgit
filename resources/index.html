@@ -1,0 +1,59 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>list of locgit repositories</title>
+    <style>
+        body {
+            font-family: 'Monaco', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>locgit repositories</h1>
+    <div id="repositories">
+        <p>no repository exists</p>
+    </div>
+
+    <script>
+        function copy(text) {
+            navigator.clipboard.writeText(text);
+        }
+        (async () => {
+            const data = await fetch('/repositories.json');
+            console.log(data);
+            const { repositories, port } = await data.json();
+            console.log(repositories, port);
+            if(0 < repositories.length) {
+                const repos_html = repositories.map(repo => {
+                    const logs = repo.logs.map(log => {
+                        return `<li>${log}</li>`;
+                    }).join('');
+                    const repo_url = `http://${location.hostname}:${port}/${repo.name}`;
+                    const clone_command = `git clone ${repo_url}`
+                    const remote_command = `git remote add locgit ${repo_url}`;
+                    return `<section>
+                        <h3>+ ${repo.name.replace(/\.git$/, '')}</h3>
+                        <h4>latest 5 commits</h4>
+                        <ul>
+                            ${logs}
+                        </ul>
+                        <h4>snippet (click to copy)</h4>
+                        <ul>
+                            <li><a href="javascript:void(0);" onclick="copy('${repo_url}')" title="copy to clipboard">
+                                <code>${repo_url}</code>
+                            </a></li>
+                            <li><a href="javascript:void(0);" onclick="copy('${clone_command}')" title="copy to clipboard">
+                                <code>${clone_command}</code>
+                            </a></li>
+                            <li><a href="javascript:void(0);" onclick="copy('${remote_command}')" title="copy to clipboard">
+                                    <code>${remote_command}</code>
+                            </a></li>
+                        </ul>
+                    </section>`;
+                }).join('<hr>');
+                document.getElementById('repositories').innerHTML = repos_html;
+            }
+        })();
+    </script>
+</body>
+</html>
