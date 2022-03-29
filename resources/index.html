@@ -1,6 +1,7 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <link rel="icon" type="image/x-icon" href="/git-black.ico">
     <title>list of locgit repositories</title>
     <style>
         body {
@@ -25,9 +26,11 @@
             console.log(repositories, port);
             if(0 < repositories.length) {
                 const repos_html = repositories.map(repo => {
-                    const logs = repo.logs.map(log => {
-                        return `<li>${log}</li>`;
-                    }).join('');
+                    const logs = 0 < repo.logs.length 
+                        ? repo.logs.map(log => {
+                            return `<li>${log}</li>`;
+                        }).join('')
+                        : '<li>no commits</li>';
                     const repo_url = `http://${location.hostname}:${port}/${repo.name}`;
                     const clone_command = `git clone ${repo_url}`
                     const remote_command = `git remote add locgit ${repo_url}`;

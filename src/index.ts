@@ -71,7 +71,7 @@ function push_log(log: string) {
     }
     if(tray) {
         tray.setToolTip(`${app.name} is running.\n---- ---- ---- ----\n${logs.join("\n")}`);
-        
+
     }
 }
 
@@ -163,23 +163,25 @@ function setupRepository(): Git {
     repos.on('push', (push: PushData) => {
         const dir = repos.dirMap(`${push.repo}.git`);
         push.accept();
-        const latest_commit_message = execSync(`git log -1 --pretty="${pretty_format}"`, {
-            cwd: dir
-        }).toString();
-        const log = `pushed: ${push.repo}#${push.branch} [ ${push.commit} ]${get_address_str(push)}\n${latest_commit_message}`;
-        console.log(log);
-        push_log(log);
+        setTimeout(() => {
+            const latest_commit_message = execSync(`git log -1 --pretty="${pretty_format}"`, {
+                cwd: dir
+            }).toString();
+            const log = `pushed: ${push.repo}#${push.branch} [ ${push.commit.slice(0, 8)} ]${get_address_str(push)}\n${latest_commit_message}`;
+            console.log(log);
+            push_log(log);
+        }, 10);
     });
     
     repos.on('fetch', (fetch: FetchData) => {
-        const log = `fetched: ${fetch.repo} [ ${fetch.commit} ]${get_address_str(fetch)}`;
+        const log = `fetched: ${fetch.repo} [ ${fetch.commit.slice(0, 8)} ]${get_address_str(fetch)}`;
         console.log(log);
         push_log(log);
         fetch.accept();
     });
 
     repos.on('tag', (tag: TagData) => {
-        const log = `tag: "${tag.version}" ${tag.repo} [ ${tag.commit} ]${get_address_str(tag)}`;
+        const log = `tag: "${tag.version}" ${tag.repo} [ ${tag.commit.slice(0, 8)} ]${get_address_str(tag)}`;
         console.log(log);
         push_log(log);
         tag.accept();
@@ -192,12 +194,12 @@ function setupRepository(): Git {
     //     info.accept();
     // });
 
-    repos.on('head', (head: HeadData) => {
-        const log = `head: ${head.repo}${get_address_str(head)}`;
-        console.log(log);
-        push_log(log);
-        head.accept();
-    });
+    // repos.on('head', (head: HeadData) => {
+    //     const log = `head: ${head.repo}${get_address_str(head)}`;
+    //     console.log(log);
+    //     push_log(log);
+    //     head.accept();
+    // });
 
     repos.listen(settings.port, { type: 'http' }, () => {
         console.log(`gitectron running at http://localhost:${settings.port}`);
@@ -247,7 +249,8 @@ import { AddressInfo } from 'net';
 
 const express_app = express();
 
-// respond with "hello world" when a GET request is made to the homepage
+express_app.use(express.static(resource_dir));
+
 express_app.get('/', (req, res) => {
     res.sendFile('index.html', { root: resource_dir });
 })
