@@ -34,25 +34,27 @@
                     const repo_url = `http://${location.hostname}:${port}/${repo.name}`;
                     const clone_command = `git clone ${repo_url}`
                     const remote_command = `git remote add locgit ${repo_url}`;
-                    return `<section>
-                        <h3>+ ${repo.name.replace(/\.git$/, '')}</h3>
-                        <h4>latest 5 commits</h4>
-                        <ul>
-                            ${logs}
-                        </ul>
-                        <h4>snippet (click to copy)</h4>
-                        <ul>
-                            <li><a href="javascript:void(0);" onclick="copy('${repo_url}')" title="copy '${repo_url}' to clipboard">
-                                <code>${repo_url}</code>
-                            </a></li>
-                            <li><a href="javascript:void(0);" onclick="copy('${clone_command}')" title="copy '${repo_url}' to clipboard">
-                                <code>${clone_command}</code>
-                            </a></li>
-                            <li><a href="javascript:void(0);" onclick="copy('${remote_command}')" title="copy '${repo_url}' to clipboard">
-                                    <code>${remote_command}</code>
-                            </a></li>
-                        </ul>
-                    </section>`;
+                    return (
+`<section>
+    <h3>+ ${repo.name.replace(/\.git$/, '')}</h3>
+    <h4>latest 5 commits</h4>
+    <ul>
+        ${logs}
+    </ul>
+    <h4>snippet (click to copy)</h4>
+    <ul>
+        <li><a href="javascript:void(0);" onclick="copy('${repo_url}')" title="copy '${repo_url}' to clipboard">
+            <code>${repo_url}</code>
+        </a></li>
+        <li><a href="javascript:void(0);" onclick="copy('${clone_command}')" title="copy '${repo_url}' to clipboard">
+            <code>${clone_command}</code>
+        </a></li>
+        <li><a href="javascript:void(0);" onclick="copy('${remote_command}')" title="copy '${repo_url}' to clipboard">
+                <code>${remote_command}</code>
+        </a></li>
+    </ul>
+</section>`
+                    );
                 }).join('<hr>');
                 document.getElementById('repositories').innerHTML = repos_html;
             }

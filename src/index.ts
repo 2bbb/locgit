@@ -14,6 +14,7 @@ import {
 
 let tray: Tray | null = null;
 let window: BrowserWindow | null = null;
+
 function sendApi(channel: string, args: any) {
     if(!window) return;
     window.webContents.send('init-response', settings);
@@ -23,14 +24,18 @@ const resource_dir = path.join(__dirname, '../resources');
 const default_settings = {
     port: 18080,
     repository_path: path.join(app.getPath('home'), 'locgit_repositories'),
+    express_port: 8080,
 };
+
 const settings_path = path.join(app.getPath('userData'), 'settings.json');
 type Settings = typeof default_settings;
+
 function isValidSettings(settings: any): settings is Settings {
     return typeof settings === 'object' &&
         typeof settings.port === 'number' &&
         typeof settings.repository_path === 'string';
 }
+
 function saveSettings() {
     fs.writeFileSync(settings_path, JSON.stringify(settings, null, 4));
 }
@@ -38,7 +43,14 @@ function saveSettings() {
 if(!fs.existsSync(settings_path)) {
     fs.writeFileSync(settings_path, JSON.stringify(default_settings, null, 4));
 }
+
 const settings_json = JSON.parse(fs.readFileSync(settings_path, 'utf8'));
+
+// for backward compatibility
+if(settings_json.express_port == null) {
+    settings_json.express_port = default_settings.express_port;
+}
+
 const settings: Settings = isValidSettings(settings_json) ? settings_json : default_settings;
 
 function setContextMenu() {
@@ -53,7 +65,7 @@ function setContextMenu() {
         { 
             label: `Open list of repositories on browser`,
             click() {
-                shell.openExternal('http://localhost:8080/');
+                shell.openExternal(`http://localhost:${settings.express_port}/`);
             }
         },
         { label: 'Quit', role: 'quit' },
@@ -209,28 +221,95 @@ function setupRepository(): Git {
 
 let repos = setupRepository();
 
+import express from "express";
+import { AddressInfo } from 'net';
+
+function setup_express() {
+    const app = express();
+
+    app.use(express.static(resource_dir));
+
+    app.get('/', (req, res) => {
+        res.sendFile('index.html', { root: resource_dir });
+    })
+
+    app.get('/repositories.json', async (req, res) => {
+        try {
+            const repositories = await (await repos.list()).map(repo => {
+                const dir = repos.dirMap(`${repo}`);
+                const logs = [0, 1, 2, 3, 4].map((n) => {
+                    const command = `git log -1 --skip=${n} --pretty="${pretty_format}"`;
+                    try {
+                        const log = execSync(command, {
+                            cwd: dir
+                        }).toString();
+                        return log;
+                    } catch(err) {
+                        return undefined;
+                    }
+                }).filter(log => log != '' && log != null);
+                return { name: repo, logs };
+            });
+            res.status(200).json({ repositories, port: settings.port });
+        } catch(err) {
+            res.status(500).send((err as any).toString());
+        }
+    });
+
+    const server = app.listen(settings.express_port, '0.0.0.0', () => {
+        console.log(`http server on port ${settings.express_port}`);
+    });
+
+    return { app, server };
+}
+
+let express_env = setup_express();
+
 ipcMain.on('init-request', (e: Electron.IpcMainEvent) => {
     sendApi('init-response', settings);
 });
 
-ipcMain.on('apply', (e: Electron.IpcMainEvent, { port, repository_path }: { port: number, repository_path: string }) => {
-    if(Number.isInteger(port) && 1024 <= port && port <= 65535) {
-        settings.port = port;
+function valid_port(port: any): boolean {
+    return Number.isInteger(port) 
+        && 1024 <= port 
+        && port <= 65535;
+}
+
+ipcMain.on('apply', (e: Electron.IpcMainEvent, { port, repository_path, express_port }: { port: number, repository_path: string, express_port: number }) => {
+    if(valid_port(port)) {
+        if(valid_port(express_port)) {
+            if(port != express_port) {
+                settings.port = port;
+                settings.express_port = express_port;
+            } else {
+                sendApi('alert', `git port and web server port are same: ${port} / ${express_port}`);
+                return;
+            }
+        } else {
+            sendApi('alert', `invalid port: ${express_port}`);
+            return;
+        }
     } else {
         sendApi('alert', `invalid port: ${port}`);
         return;
     }
-    settings.repository_path = repository_path;
     try {
         if(!fs.existsSync(repository_path)) {
             fs.mkdirSync(repository_path);
+            settings.repository_path = repository_path;
         }
     } catch(err) {
         sendApi('alert', `invalid repositries path: ${repository_path}`);
         return;
     }
+
     repos.close();
     repos = setupRepository();
+    if(express_env.server != null) {
+        express_env.app.removeAllListeners();
+        express_env.server.close();
+    }
+    express_env = setup_express();
     setContextMenu();
     saveSettings();
 });
@@ -242,42 +321,4 @@ ipcMain.on('open-website', async () => {
         console.error('Error:', err);
         sendApi('alert', 'failed to open https://github.com/2bbb/locgit\n' + err.toString());
     }
-});
-
-import express from "express";
-import { AddressInfo } from 'net';
-
-const express_app = express();
-
-express_app.use(express.static(resource_dir));
-
-express_app.get('/', (req, res) => {
-    res.sendFile('index.html', { root: resource_dir });
-})
-
-express_app.get('/repositories.json', async (req, res) => {
-    try {
-        const repositories = await (await repos.list()).map(repo => {
-            const dir = repos.dirMap(`${repo}`);
-            const logs = [0, 1, 2, 3, 4].map((n) => {
-                const command = `git log -1 --skip=${n} --pretty="${pretty_format}"`;
-                try {
-                    const log = execSync(command, {
-                        cwd: dir
-                    }).toString();
-                    return log;
-                } catch(err) {
-                    return undefined;
-                }
-            }).filter(log => log != '' && log != null);
-            return { name: repo, logs };
-        });
-        res.status(200).json({ repositories, port: settings.port });
-    } catch(err) {
-        res.status(500).send((err as any).toString());
-    }
-});
-
-express_app.listen(8080, '0.0.0.0', () => {
-    console.log('http server on port 8080');
 });
