@@ -214,7 +214,8 @@ function setupRepository(): Git {
     });
     const original_handle = repos.handle;
     repos.handle = (req: IncomingMessage, res: ServerResponse) => {
-        if(req.rawHeaders.indexOf('Git-Protocol') != -1) {
+        // console.log(req.headers, req.rawHeaders);
+        if(req.rawHeaders.indexOf('Git-Protocol') != -1 || (req.headers['user-agent'] && /^git\//.test(req.headers['user-agent']))) {
             console.log('to node-git-server handle');
             original_handle.apply(repos, [req, res]);
         } else {
