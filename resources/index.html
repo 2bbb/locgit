@@ -20,7 +20,7 @@
             navigator.clipboard.writeText(text);
         }
         (async () => {
-            const data = await fetch('/repositories.json');
+            const data = await fetch('/list/repositories.json');
             console.log(data);
             const { repositories, port } = await data.json();
             console.log(repositories, port);
@@ -36,7 +36,7 @@
                     const remote_command = `git remote add locgit ${repo_url}`;
                     return (
 `<section>
-    <h3>+ ${repo.name.replace(/\.git$/, '')}</h3>
+    <h3>+ <a href="./repos/${repo.name}">${repo.name.replace(/\.git$/, '')}</a></h3>
     <h4>latest 5 commits</h4>
     <ul>
         ${logs}

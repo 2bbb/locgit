@@ -1,5 +1,7 @@
 import path from 'path';
 import fs from 'fs';
+import { IncomingMessage, ServerResponse } from 'http';
+import { AddressInfo } from 'net';
 
 import {
     app,
@@ -24,7 +26,6 @@ const resource_dir = path.join(__dirname, '../resources');
 const default_settings = {
     port: 18080,
     repository_path: path.join(app.getPath('home'), 'locgit_repositories'),
-    express_port: 8080,
 };
 
 const settings_path = path.join(app.getPath('userData'), 'settings.json');
@@ -46,11 +47,6 @@ if(!fs.existsSync(settings_path)) {
 
 const settings_json = JSON.parse(fs.readFileSync(settings_path, 'utf8'));
 
-// for backward compatibility
-if(settings_json.express_port == null) {
-    settings_json.express_port = default_settings.express_port;
-}
-
 const settings: Settings = isValidSettings(settings_json) ? settings_json : default_settings;
 
 function setContextMenu() {
@@ -65,7 +61,7 @@ function setContextMenu() {
         { 
             label: `Open list of repositories on browser`,
             click() {
-                shell.openExternal(`http://localhost:${settings.express_port}/`);
+                shell.openExternal(`http://localhost:${settings.port}/`);
             }
         },
         { label: 'Quit', role: 'quit' },
@@ -216,13 +212,23 @@ function setupRepository(): Git {
     repos.listen(settings.port, { type: 'http' }, () => {
         console.log(`gitectron running at http://localhost:${settings.port}`);
     });
+    const original_handle = repos.handle;
+    repos.handle = (req: IncomingMessage, res: ServerResponse) => {
+        if(req.rawHeaders.indexOf('Git-Protocol') != -1) {
+            console.log('to node-git-server handle');
+            original_handle.apply(repos, [req, res]);
+        } else {
+            console.log('to express handle');
+            express_app(req, res);
+        }
+    };
+
     return repos;
 }
 
 let repos = setupRepository();
 
 import express from "express";
-import { AddressInfo } from 'net';
 
 function setup_express() {
     const app = express();
@@ -233,7 +239,17 @@ function setup_express() {
         res.sendFile('index.html', { root: resource_dir });
     })
 
-    app.get('/repositories.json', async (req, res) => {
+    app.get('/repos/:repo.git', async (req, res) => {
+        const repo = req.params.repo;
+        const dir = repos.dirMap(`${repo}.git`);
+        if(fs.existsSync(dir)) {
+            res.sendFile('detail.html', { root: resource_dir });
+        } else {
+            res.status(404).send('404: repository not found');
+        }
+    });
+
+    app.get('/list/repositories.json', async (req, res) => {
         try {
             const repositories = await (await repos.list()).map(repo => {
                 const dir = repos.dirMap(`${repo}`);
@@ -256,14 +272,40 @@ function setup_express() {
         }
     });
 
-    const server = app.listen(settings.express_port, '0.0.0.0', () => {
-        console.log(`http server on port ${settings.express_port}`);
+    app.get('/data/:repo.json', async (req, res) => {
+        const repo = req.params.repo;
+        const dir = repos.dirMap(`${repo}.git`);
+        if(fs.existsSync(dir)) {
+            const logs = [... Array(10).keys()].map((n) => {
+                const command = `git log -1 --skip=${n} --pretty="${pretty_format}"`;
+                try {
+                    const log = execSync(command, {
+                        cwd: dir
+                    }).toString();
+                    return log;
+                } catch(err) {
+                    return undefined;
+                }
+            }).filter(log => log != '' && log != null);
+            const files = execSync(`git ls-tree -r --name-only HEAD`, {
+                cwd: dir
+            }).toString().split('\n').filter(file => file != '');
+            const branches = execSync(`git branch`, {
+                cwd: dir
+            }).toString().split('\n').filter(file => file != '');
+            const tags = execSync(`git tag`, {
+                cwd: dir
+            }).toString().split('\n').filter(file => file != '');
+            res.status(200).json({ name: repo, logs, files, branches, tags });
+        } else {
+            res.status(404).json({ error: 'repo not found' });
+        }
     });
 
-    return { app, server };
+    return app;
 }
 
-let express_env = setup_express();
+const express_app = setup_express();
 
 ipcMain.on('init-request', (e: Electron.IpcMainEvent) => {
     sendApi('init-response', settings);
@@ -275,20 +317,9 @@ function valid_port(port: any): boolean {
         && port <= 65535;
 }
 
-ipcMain.on('apply', (e: Electron.IpcMainEvent, { port, repository_path, express_port }: { port: number, repository_path: string, express_port: number }) => {
+ipcMain.on('apply', (e: Electron.IpcMainEvent, { port, repository_path }: { port: number, repository_path: string }) => {
     if(valid_port(port)) {
-        if(valid_port(express_port)) {
-            if(port != express_port) {
-                settings.port = port;
-                settings.express_port = express_port;
-            } else {
-                sendApi('alert', `git port and web server port are same: ${port} / ${express_port}`);
-                return;
-            }
-        } else {
-            sendApi('alert', `invalid port: ${express_port}`);
-            return;
-        }
+        settings.port = port;
     } else {
         sendApi('alert', `invalid port: ${port}`);
         return;
@@ -305,11 +336,6 @@ ipcMain.on('apply', (e: Electron.IpcMainEvent, { port, repository_path, express_
 
     repos.close();
     repos = setupRepository();
-    if(express_env.server != null) {
-        express_env.app.removeAllListeners();
-        express_env.server.close();
-    }
-    express_env = setup_express();
     setContextMenu();
     saveSettings();
 });

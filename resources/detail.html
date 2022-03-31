@@ -1,0 +1,104 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="icon" type="icon" href="/git-black.ico">
+    <title>repository detail</title>
+    <style>
+        body {
+            font-family: 'Monaco', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="repository">
+        <h1 id="repo_name"></h1>
+        <h2>latest 10 commits</h2>
+        <ul id="commits">
+            <li>no commits</li>
+        </ul>
+        <h2>files of <span id="current_branch_name">----</span></h2>
+        <ul id="files">
+            <li>no files</li>
+        </ul>
+        <h2>branches</h2>
+        <ul id="branches">
+            <li>no branches</li>
+        </ul>
+        <h2>tags</h2>
+        <ul id="tags">
+            <li>no tags</li>
+        </ul>
+    </div>
+    <script>
+        (async () => {
+            const resp = await fetch(location.pathname.replace(/^\/repos\//, '/data/').replace('.git', '.json'));
+            const data = await resp.json();
+            console.log(data);
+            const { name, logs, files, branches, tags } = data;
+            document.getElementById('repo_name').innerText = name;
+
+            const logs_html = 0 < logs.length 
+                ? logs.map(log => {
+                    return `<li>${log}</li>`;
+                }).join('')
+                : '<li>no commits</li>';
+            document.getElementById('commits').innerHTML = logs_html;
+            
+            function construct_tree(tree, hierarchy) {
+                const [ head, ... tail ] = hierarchy;
+                if(0 < tail.length) {
+                    if(!tree[head]) {
+                        tree[head] = { type: 'directory', name: head, children: {} };
+                    }
+                    construct_tree(tree[head].children, tail);
+                } else {
+                    tree[head] = { type: 'file', name: head };
+                }
+                return tree;
+            }
+
+            function create_tree_html(file_tree) {
+                return Object.keys(file_tree)
+                    .sort()
+                    .map(key => {
+                        const { type, name, children } = file_tree[key];
+                        if(type === 'directory') {
+                            return `<li><span>${name}/</span><ul>${create_tree_html(children)}</ul></li>`;
+                        } else {
+                            return `<li>${name}</li>`;
+                        }
+                    }).join('');
+            }
+
+            if(0 < files.length) {
+                const file_tree = files
+                    .map(file => file.split('/'))
+                    .reduce(construct_tree, {});
+                const files_html = create_tree_html(file_tree);
+                console.log(file_tree);
+                document.getElementById('files').innerHTML = files_html;
+            }
+
+            if(0 < branches.length) {
+                const branches_html = branches
+                    .map(name => /^\* /.test(name) ? `${name.replace(/^\* /, '')} [default branch]` : `${name.replace("  ", "")}`)
+                    .map(branch => `<li>${branch}</li>`)
+                    .join('');
+                document.getElementById('branches').innerHTML = branches_html;
+                const current_branch = branches.find(name => /^\* /.test(name));
+                if(current_branch) {
+                    console.log(current_branch);
+                    document.getElementById('current_branch_name').innerText = current_branch.replace(/^\* /, '');
+                }
+            }
+
+            if(0 < tags.length) {
+                const tags_html = tags
+                    .map(tag => `<li>${tag}</li>`)
+                    .join('');
+                document.getElementById('tags').innerHTML = tags_html;
+            }
+        })();
+    </script>
+</body>
+</html>

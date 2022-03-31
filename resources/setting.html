@@ -40,13 +40,6 @@
         id="repository_path" 
         type="text"
         value=""><br>
-    <label for="express_port">web server port</label>: <input
-        id="express_port" 
-        type="number"
-        value="8080"
-        min="1024"
-        max="65535"
-        step="1"><br>
     <button id="apply">apply</button>
     <hr>
     <button id="open_website">open website</button>
@@ -67,25 +60,10 @@
 
         const repository_path_elem = document.getElementById('repository_path');
 
-        const web_server_port_elem = document.getElementById('express_port');
-        let web_server_correct_port = 8080;
-        web_server_port_elem.addEventListener('change', () => {
-            const value = parseFloat(web_server_port_elem.value);
-            if(value < 1024 || 65535 < value) {
-                alert('port number must be between 1024 and 65535');
-                web_server_port_elem.value = web_server_correct_port.toString();
-                return;
-            } else if(!Number.isInteger(value)) {
-                web_server_port_elem.value = Math.floor(value).toString();
-            }
-            web_server_correct_port = parseInt(web_server_port_elem.value);
-        });
-
         document.getElementById('apply').onclick = function() {
             const port = parseInt(port_elem.value);
             const repository_path = repository_path_elem.value;
-            const express_port = parseInt(web_server_port_elem.value);
-            api.send('apply', { port, repository_path, express_port });
+            api.send('apply', { port, repository_path });
         }
 
         api.send('init-request');
@@ -94,9 +72,8 @@
             correct_port = setting.port;
             port_elem.value = setting.port.toString();
             repository_path_elem.value = setting.repository_path;
-            web_server_port_elem.value = setting.express_port.toString();
         });
-        
+
         api.on('alert', (text) => {
             console.log('alert', text);
             alert(text);
