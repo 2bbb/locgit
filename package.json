@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.13",
+    "@types/mime-types": "^2.1.1",
     "@types/node": "^16.0.0",
     "electron": "^17.1.2",
     "electron-builder": "^22.14.13",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "express": "^4.17.3",
+    "mime-types": "^2.1.35",
     "moment": "^2.29.1",
     "node-git-server": "^1.0.0-beta.30"
   },

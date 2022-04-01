@@ -3,6 +3,8 @@ import fs from 'fs';
 import { IncomingMessage, ServerResponse } from 'http';
 import { AddressInfo } from 'net';
 
+import mimetype from 'mime-types';
+
 import {
     app,
     Tray,
@@ -216,10 +218,10 @@ function setupRepository(): Git {
     repos.handle = (req: IncomingMessage, res: ServerResponse) => {
         // console.log(req.headers, req.rawHeaders);
         if(req.rawHeaders.indexOf('Git-Protocol') != -1 || (req.headers['user-agent'] && /^git\//.test(req.headers['user-agent']))) {
-            console.log('to node-git-server handle');
+            // console.log('to node-git-server handle');
             original_handle.apply(repos, [req, res]);
         } else {
-            console.log('to express handle');
+            // console.log('to express handle');
             express_app(req, res);
         }
     };
@@ -250,6 +252,39 @@ function setup_express() {
         }
     });
 
+    app.get('/repos/:repo.git/:branch', async (req, res) => {
+        const repo = req.params.repo;
+        const branch = req.params.branch;
+        const dir = repos.dirMap(`${repo}.git`);
+        if(fs.existsSync(dir)) {
+            res.sendFile('detail.html', { root: resource_dir });
+        } else {
+            res.status(404).send('404: repository not found');
+        }
+    });
+
+    app.get('/repos/:repo.git/:branch/files/:filepath*', async (req, res) => {
+        const repo = req.params.repo;
+        const branch = req.params.branch;
+        const filepath = (req.params as any)["filepath"] + (req.params as any)["0"];
+        try {
+            console.log(repo, branch, filepath, req.params);
+
+            const command = `git show ${branch}:${filepath}`
+
+            const dir = repos.dirMap(`${repo}.git`);
+            const data = execSync(command, {
+                cwd: dir
+            });
+            const contentType = mimetype.contentType(path.basename(filepath)) || 'application/octet-stream';
+            console.log(filepath, contentType);
+            res.setHeader('content-type', contentType);
+            res.send(data);
+        } catch(err) {
+            res.status(404).send(`404: file not found on branch: ${branch}, path: ${filepath}`);
+        }
+    });
+
     app.get('/list/repositories.json', async (req, res) => {
         try {
             const repositories = await (await repos.list()).map(repo => {
@@ -276,9 +311,10 @@ function setup_express() {
     app.get('/data/:repo.json', async (req, res) => {
         const repo = req.params.repo;
         const dir = repos.dirMap(`${repo}.git`);
+        const branch = req.query.branch;
         if(fs.existsSync(dir)) {
             const logs = [... Array(10).keys()].map((n) => {
-                const command = `git log -1 --skip=${n} --pretty="${pretty_format}"`;
+                const command = `git log -1 --skip=${n} --pretty="${pretty_format}" ${branch ? '--first-parent ' + branch : ''}`;
                 try {
                     const log = execSync(command, {
                         cwd: dir
@@ -288,7 +324,7 @@ function setup_express() {
                     return undefined;
                 }
             }).filter(log => log != '' && log != null);
-            const files = execSync(`git ls-tree -r --name-only HEAD`, {
+            const files = execSync(`git ls-tree -r --name-only ${branch ?? 'HEAD'}`, {
                 cwd: dir
             }).toString().split('\n').filter(file => file != '');
             const branches = execSync(`git branch`, {
@@ -297,7 +333,7 @@ function setup_express() {
             const tags = execSync(`git tag`, {
                 cwd: dir
             }).toString().split('\n').filter(file => file != '');
-            res.status(200).json({ name: repo, logs, files, branches, tags });
+            res.status(200).json({ name: repo, logs, files, branches, tags, branch: branch });
         } else {
             res.status(404).json({ error: 'repo not found' });
         }

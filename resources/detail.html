@@ -10,13 +10,18 @@
     </style>
 </head>
 <body>
+    <nav><a href="/">go back list of repositories</a></nav>
     <div id="repository">
         <h1 id="repo_name"></h1>
+        <h2>snippet (copy to clipboard)</h2>
+        <ul id="snippets">
+            <li>----</li>
+        </ul>
         <h2>latest 10 commits</h2>
         <ul id="commits">
             <li>no commits</li>
         </ul>
-        <h2>files of <span id="current_branch_name">----</span></h2>
+        <h2>files on branch "<span id="current_branch_name">----</span>"</h2>
         <ul id="files">
             <li>no files</li>
         </ul>
@@ -30,11 +35,21 @@
         </ul>
     </div>
     <script>
-        (async () => {
-            const resp = await fetch(location.pathname.replace(/^\/repos\//, '/data/').replace('.git', '.json'));
+        function copy(text) {
+            navigator.clipboard.writeText(text);
+        }
+        async function init() {
+            console.log(location.pathname);
+            const repo_name = location.pathname.match(/^\/repos\/([^\/]+)\.git\/?/)[1];
+            console.log('repo', repo_name);
+            const regex_res = location.pathname.match(/^\/repos\/[^\/]+\.git\/(.+)\/?/);
+            console.log('regex_res', regex_res);
+            const current_branchname = regex_res ? regex_res[1] : null;
+            console.log('current_branchname', current_branchname);
+            const resp = await fetch(`/data/${repo_name}.json` + (current_branchname ? ('?branch=' + current_branchname) : ''));
             const data = await resp.json();
             console.log(data);
-            const { name, logs, files, branches, tags } = data;
+            const { name, logs, files, branches, tags, branch } = data;
             document.getElementById('repo_name').innerText = name;
 
             const logs_html = 0 < logs.length 
@@ -44,15 +59,48 @@
                 : '<li>no commits</li>';
             document.getElementById('commits').innerHTML = logs_html;
             
-            function construct_tree(tree, hierarchy) {
+            function process_branch() {
+                if(0 < branches.length) {
+                    const branches_html = branches
+                        .map(name => {
+                            const branch_info = /^\* /.test(name)
+                                ? { name: `${name.replace(/^\* /, '')}`, is_default: true }
+                                : { name: `${name.replace("  ", "")}`, is_default: false }
+                            if(branch == null) {
+                                branch_info.is_showing_branch = branch_info.is_default;
+                            } else if(branch_info.name == branch) {
+                                branch_info.is_showing_branch = true;
+                            }
+                            return branch_info;
+                        })
+                        .map(branch => `<li><a href="/repos/${repo_name}.git/${branch.name}">${branch.name}</a>${branch.is_default ? ' [default]' : ''}${branch.is_showing_branch ? ' [showing]' : ''}</li>`)
+                        .join('');
+                    document.getElementById('branches').innerHTML = branches_html;
+                    const current_branch = branches.find(name => /^\* /.test(name));
+                    if(branch) {
+                        document.getElementById('current_branch_name').innerText = branch;
+                        return branch
+                    } else if(current_branch) {
+                        const branch = current_branch.replace(/^\* /, '');
+                        console.log(branch);
+                        document.getElementById('current_branch_name').innerText = branch;
+                        return branch;
+                    }
+                }
+            }
+
+            const branch_name = process_branch();
+
+            function construct_tree(tree, data) {
+                const { path, hierarchy } = data;
                 const [ head, ... tail ] = hierarchy;
                 if(0 < tail.length) {
                     if(!tree[head]) {
-                        tree[head] = { type: 'directory', name: head, children: {} };
+                        tree[head] = { type: 'directory', path, name: head, children: {} };
                     }
-                    construct_tree(tree[head].children, tail);
+                    construct_tree(tree[head].children, { path, hierarchy: tail });
                 } else {
-                    tree[head] = { type: 'file', name: head };
+                    tree[head] = { type: 'file', path, name: head };
                 }
                 return tree;
             }
@@ -61,35 +109,22 @@
                 return Object.keys(file_tree)
                     .sort()
                     .map(key => {
-                        const { type, name, children } = file_tree[key];
+                        const { type, name, children, path } = file_tree[key];
                         if(type === 'directory') {
                             return `<li><span>${name}/</span><ul>${create_tree_html(children)}</ul></li>`;
                         } else {
-                            return `<li>${name}</li>`;
+                            return `<li data-path="${path}"><a href="/repos/${repo_name}.git/${branch_name}/files/${path}">${name}</a></li>`;
                         }
                     }).join('');
             }
 
             if(0 < files.length) {
                 const file_tree = files
-                    .map(file => file.split('/'))
+                    .map(file => ({ path: file, hierarchy: file.split('/') }) )
                     .reduce(construct_tree, {});
                 const files_html = create_tree_html(file_tree);
                 console.log(file_tree);
                 document.getElementById('files').innerHTML = files_html;
-            }
-
-            if(0 < branches.length) {
-                const branches_html = branches
-                    .map(name => /^\* /.test(name) ? `${name.replace(/^\* /, '')} [default branch]` : `${name.replace("  ", "")}`)
-                    .map(branch => `<li>${branch}</li>`)
-                    .join('');
-                document.getElementById('branches').innerHTML = branches_html;
-                const current_branch = branches.find(name => /^\* /.test(name));
-                if(current_branch) {
-                    console.log(current_branch);
-                    document.getElementById('current_branch_name').innerText = current_branch.replace(/^\* /, '');
-                }
             }
 
             if(0 < tags.length) {
@@ -98,7 +133,23 @@
                     .join('');
                 document.getElementById('tags').innerHTML = tags_html;
             }
-        })();
+
+            const repo_url = `http://${location.hostname}:${location.port}/${repo_name}.git`;
+            const clone_command = `git clone ${repo_url}`
+            const remote_command = `git remote add locgit ${repo_url}`;
+            document.getElementById('snippets').innerHTML = (
+        `<li><a href="javascript:void(0);" onclick="copy('${repo_url}')" title="copy '${repo_url}' to clipboard">
+            <code>${repo_url}</code>
+        </a></li>
+        <li><a href="javascript:void(0);" onclick="copy('${clone_command}')" title="copy '${repo_url}' to clipboard">
+            <code>${clone_command}</code>
+        </a></li>
+        <li><a href="javascript:void(0);" onclick="copy('${remote_command}')" title="copy '${repo_url}' to clipboard">
+                <code>${remote_command}</code>
+        </a></li>`
+);
+        }
+        init();
     </script>
 </body>
 </html>
