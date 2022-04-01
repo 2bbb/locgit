@@ -3,54 +3,87 @@
     <meta charset="utf-8">
     <link rel="icon" type="icon" href="/git-black.ico">
     <title>repository detail</title>
+    <script src="/js/marked.min.js"></script>
     <style>
         body {
             font-family: 'Monaco', monospace;
+            font-size: 12px;
         }
+        .hidden {
+            display: none;
+        }
+        /* #readme_contents {
+            transform-origin: left top;
+            transform: scale(0.8, 0.8);
+        } */
     </style>
 </head>
 <body>
     <nav><a href="/">go back list of repositories</a></nav>
     <div id="repository">
-        <h1 id="repo_name"></h1>
-        <h2>snippet (copy to clipboard)</h2>
-        <ul id="snippets">
-            <li>----</li>
-        </ul>
-        <h2>latest 10 commits</h2>
-        <ul id="commits">
-            <li>no commits</li>
-        </ul>
-        <h2>files on branch "<span id="current_branch_name">----</span>"</h2>
-        <ul id="files">
-            <li>no files</li>
-        </ul>
-        <h2>branches</h2>
-        <ul id="branches">
-            <li>no branches</li>
-        </ul>
-        <h2>tags</h2>
-        <ul id="tags">
-            <li>no tags</li>
-        </ul>
+        <h1 id="page_title"></h1>
+        
+        <section>
+            <h2>snippet (copy to clipboard)</h2>
+            <ul id="snippets">
+                <li>----</li>
+            </ul>
+        </section>
+        <hr>
+
+        <section id="readme">
+            <h2 id="readme_title">README</h2>
+            <article id="readme_contents" class="hidden">
+                <p>no readme exists</p>
+            </article>
+        </section>
+        <hr>
+
+        <section>
+            <h2>files on branch "<span id="current_branch_name">----</span>"</h2>
+            <ul id="files">
+                <li>no files</li>
+            </ul>
+        </section>
+        <hr>
+
+        <section>
+            <h2>latest 10 commits</h2>
+            <ul id="commits">
+                <li>no commits</li>
+            </ul>
+        </section>
+        <hr>
+        
+        <section>
+            <h2>branches</h2>
+            <ul id="branches">
+                <li>no branches</li>
+            </ul>
+        </section>
+        <hr>
+
+        <section>
+            <h2>tags</h2>
+            <ul id="tags">
+                <li>no tags</li>
+            </ul>
+        </section>
     </div>
     <script>
         function copy(text) {
             navigator.clipboard.writeText(text);
         }
         async function init() {
-            console.log(location.pathname);
             const repo_name = location.pathname.match(/^\/repos\/([^\/]+)\.git\/?/)[1];
-            console.log('repo', repo_name);
+            document.title = `repository detail of ${repo_name}.git`;
             const regex_res = location.pathname.match(/^\/repos\/[^\/]+\.git\/(.+)\/?/);
-            console.log('regex_res', regex_res);
             const current_branchname = regex_res ? regex_res[1] : null;
-            console.log('current_branchname', current_branchname);
             const resp = await fetch(`/data/${repo_name}.json` + (current_branchname ? ('?branch=' + current_branchname) : ''));
             const data = await resp.json();
             console.log(data);
             const { name, logs, files, branches, tags, branch } = data;
-            document.getElementById('repo_name').innerText = name;
+            document.getElementById('page_title').innerText = `+ repository detail of ${repo_name}.git`;
 
             const logs_html = 0 < logs.length 
                 ? logs.map(log => {
@@ -105,13 +138,13 @@
                 return tree;
             }
 
-            function create_tree_html(file_tree) {
+            function create_file_tree_html(file_tree) {
                 return Object.keys(file_tree)
                     .sort()
                     .map(key => {
                         const { type, name, children, path } = file_tree[key];
                         if(type === 'directory') {
-                            return `<li><span>${name}/</span><ul>${create_tree_html(children)}</ul></li>`;
+                            return `<li><span>${name}/</span><ul>${create_file_tree_html(children)}</ul></li>`;
                         } else {
                             return `<li data-path="${path}"><a href="/repos/${repo_name}.git/${branch_name}/files/${path}">${name}</a></li>`;
                         }
@@ -122,7 +155,7 @@
                 const file_tree = files
                     .map(file => ({ path: file, hierarchy: file.split('/') }) )
                     .reduce(construct_tree, {});
-                const files_html = create_tree_html(file_tree);
+                const files_html = create_file_tree_html(file_tree);
                 console.log(file_tree);
                 document.getElementById('files').innerHTML = files_html;
             }
@@ -148,6 +181,32 @@
                 <code>${remote_command}</code>
         </a></li>`
 );
+
+            const readme_md = files.find(file => file.toLowerCase() == 'readme.md') || files.find(file => file.toLowerCase() == 'readme.markdown');
+            const readme_txt = files.find(file => file.toLowerCase() == 'readme') || files.find(file => file == 'readme.txt');
+            const readme_title = document.getElementById('readme_title');
+            const readme_contents = document.getElementById('readme_contents');
+
+            if(readme_md) {
+                readme_title.innerText = `${readme_md} [click to open]`;
+                const resp = await fetch(`/repos/${repo_name}.git/${branch_name}/files/${readme_md}`);
+                const data = await resp.text();
+                readme_contents.innerHTML = marked.parse(data);
+                readme_title.addEventListener('click', () => {
+                    readme_contents.classList.toggle('hidden');
+                });
+            } else if(readme_txt) {
+                readme_title.innerText = `${readme_txt} [click to open]`;
+                const resp = await fetch(`/repos/${repo_name}.git/${branch_name}/files/${readme_txt}`);
+                const data = await resp.text();
+                readme_contents.innerHTML = `<pre>${data}</pre>`;
+                readme_title.addEventListener('click', () => {
+                    readme_contents.classList.toggle('hidden');
+                });
+            } else {
+                readme_title.innerText = 'no README found';
+                readme_contents.classList.remove('hidden');
+            }
         }
         init();
     </script>

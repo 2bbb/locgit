@@ -212,7 +212,7 @@ function setupRepository(): Git {
     // });
 
     repos.listen(settings.port, { type: 'http' }, () => {
-        console.log(`gitectron running at http://localhost:${settings.port}`);
+        console.log(`locgit running at http://localhost:${settings.port}`);
     });
     const original_handle = repos.handle;
     repos.handle = (req: IncomingMessage, res: ServerResponse) => {
@@ -241,6 +241,10 @@ function setup_express() {
     app.get('/', (req, res) => {
         res.sendFile('index.html', { root: resource_dir });
     })
+
+    app.get('/:repo.git', async (req, res) => {
+        res.redirect(`/repos/${req.params.repo}.git`);
+    });
 
     app.get('/repos/:repo.git', async (req, res) => {
         const repo = req.params.repo;
